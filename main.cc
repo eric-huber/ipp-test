@@ -1,21 +1,34 @@
 #include <iostream>
 #include <cmath>
 
+#include <boost/program_options.hpp>
+
 #include <ippcore.h>
 #include <ipps.h>
 
-int main(int ac, char* av[]) {
+namespace     po = boost::program_options;
+
+const char*   _data_file_name = "fft-data.txt";
+const char*   _fft_file_name  = "fft-forward.txt";
+const char*   _bak_file_name  = "fft-backward.txt";
+
+size_t        _fft_size       = 8192;
+bool          _use_periodic   = false;
+double        _mean           = 0.5;
+double        _std            = 0.2;
+long          _iterations     = 1000000;
+
+void test_fft() {
   //Set the size
-  const int N = 128;
-  const int order = (int)(log((double)N) / log(2.0));
+  const int order = (int)(log((double)_fft_size) / log(2.0));
 
   // Spec and working buffers
-  IppsFFTSpec_C_32fc *pFFTSpec=0;
+  IppsFFTSpec_C_32fc *pFFTSpec = 0;
   Ipp8u *pFFTSpecBuf, *pFFTInitBuf, *pFFTWorkBuf;
 
   // Allocate complex buffers
-  Ipp32fc *pSrc=ippsMalloc_32fc(N);
-  Ipp32fc *pDst=ippsMalloc_32fc(N);
+  Ipp32fc *pSrc=ippsMalloc_32fc(_fft_size);
+  Ipp32fc *pDst=ippsMalloc_32fc(_fft_size);
 
   // Query to get buffer sizes
   int sizeFFTSpec,sizeFFTInitBuf,sizeFFTWorkBuf;
@@ -34,14 +47,14 @@ int main(int ac, char* av[]) {
     ippFree(pFFTInitBuf);
 
   // Do the FFT
-  ippsFFTFwd_CToC_32fc(pSrc,pDst,pFFTSpec,pFFTWorkBuf);
+  ippsFFTFwd_CToC_32fc(pSrc, pDst, pFFTSpec, pFFTWorkBuf);
 
   //check results
-  ippsFFTInv_CToC_32fc(pDst,pDst,pFFTSpec,pFFTWorkBuf);
+  ippsFFTInv_CToC_32fc(pDst, pDst, pFFTSpec, pFFTWorkBuf);
   int OK = 1;
-  for (int i = 0; i < N; i++) {
-     pDst[i].re /= (Ipp32f)N;
-     pDst[i].im /= (Ipp32f)N;
+  for (int i = 0; i < _fft_size; i++) {
+     pDst[i].re /= (Ipp32f) _fft_size;
+     pDst[i].im /= (Ipp32f) _fft_size;
      if ((abs(pSrc[i].re - pDst[i].re) > .001) ||
          (abs(pSrc[i].im - pDst[i].im) > .001) )
     {
@@ -60,5 +73,81 @@ int main(int ac, char* av[]) {
   ippFree(pSrc);
   ippFree(pDst);
 
-  return 0;
+}
+
+void time_fft() {
+
+}
+
+int main(int ac, char* av[])
+{
+  int  ret = 0;
+  bool time = false;
+
+  try {
+    po::options_description desc("Allowed options");
+
+    desc.add_options()
+    ("help,h",         "Produce help message")
+
+    ("size,s",         po::value<int>(), "Set the size of the buffer [8192]")
+
+    ("periodic,p",     "Use a periodic data set")
+    ("random,r",       "Use a gaussian distributed random data set")
+    ("mean,m",         po::value<double>(), "Mean for random data")
+    ("deviation,d",    po::value<double>(), "Standard deviation for random data")
+
+    ("time,t",         "Time the FFT")
+    ("iterations,i",   po::value<long>(), "Set the number of iterations to perform");
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(ac, av, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+      std::cout << desc << "\n";
+      return 1;
+    }
+
+    if (vm.count("size")) {
+      _fft_size = vm["size"].as<int>();
+    }
+
+    if (vm.count("periodic")) {
+      _use_periodic = true;
+    }
+
+    if (vm.count("random")) {
+    }
+
+    if (vm.count("mean")) {
+      _mean = vm["mean"].as<double>();
+    }
+
+    if (vm.count("deviation")) {
+      _std = vm["deviation"].as<double>();
+    }
+
+    if (vm.count("time")) {
+      time = true;
+    }
+
+    if (vm.count("iterations")) {
+      _iterations = vm["iterations"].as<long>();
+    }
+
+  } catch (std::exception& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+    return 1;
+  } catch (...) {
+    std::cerr << "Unknown error" << std::endl;
+    return 1;
+  }
+
+  if (time)
+    time_fft();
+  else
+    test_fft();
+
+  return ret;
 }
