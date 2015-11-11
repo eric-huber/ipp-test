@@ -131,21 +131,14 @@ void test_fft() {
   write_real(_bak_file_name, pInv);
 
   //check results
-  /*
   int OK = 1;
   for (int i = 0; i < _fft_size; i++) {
-     pDst[i].re /= (Ipp32f) _fft_size;
-     pDst[i].im /= (Ipp32f) _fft_size;
-     if ((abs(pSrc[i].re - pDst[i].re) > .001) ||
-         (abs(pSrc[i].im - pDst[i].im) > .001) )
-    {
+    if (0.001 < (abs(pSrc[i] - pInv[i]))) {
       OK = 0;
       break;
     }
   }
-
   std::cout << "FFT " << (1 == OK ? "OK" : "Fail") << std::endl;
-  */
 
   if (pFFTWorkBuf)
     ippFree(pFFTWorkBuf);
