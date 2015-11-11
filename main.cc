@@ -15,6 +15,7 @@ const char*   _fft_file_name  = "fft-forward.txt";
 const char*   _bak_file_name  = "fft-backward.txt";
 
 size_t        _fft_size       = 8192;
+size_t        _batch_size     = 10000;
 bool          _use_periodic   = false;
 double        _mean           = 0.5;
 double        _std            = 0.2;
@@ -72,7 +73,7 @@ void write_pack(std::string filename, Ipp32f* buf) {
   ofs.close();
 }
 
-void check_result(Ipp32f* pSrc, Ipp32f* pInv) {
+std::string check_result(Ipp32f* pSrc, Ipp32f* pInv) {
   int OK = 1;
   for (int i = 0; i < _fft_size; i++) {
     if (0.001 < (abs(pSrc[i] - pInv[i]))) {
@@ -80,7 +81,24 @@ void check_result(Ipp32f* pSrc, Ipp32f* pInv) {
       break;
     }
   }
-  std::cout << "FFT " << (1 == OK ? "OK" : "Fail") << std::endl;
+  return 1 == OK ? "OK" : "Fail";
+}
+
+double sqer(Ipp32f* pSrc, Ipp32f* pInv) {
+  // signal power
+  double sp = 0;
+  for (int i = 0; i < _fft_size; i++) {
+    sp += pow(pSrc[i], 2);
+  }
+
+  // quant error energy
+  double qe = 0;
+  for (int i = 0; i < _fft_size; i++) {
+    qe += pow(pSrc[i] - pInv[i], 2);
+  }
+
+  // sqer
+  return 10.0 * log(sp/qe);
 }
 
 void test_fft() {
@@ -137,8 +155,10 @@ void test_fft() {
   write_real(_bak_file_name, pInv);
 
   //check results
-  check_result(pSrc, pInv);
+  std::cout << "FFT:  " << check_result(pSrc, pInv) << std::endl;
+  std::cout << "SQER: " << sqer(pSrc, pInv) << std::endl;
 
+  // free
   if (pFFTWorkBuf)
     ippFree(pFFTWorkBuf);
   if (pFFTSpecBuf)
@@ -150,7 +170,102 @@ void test_fft() {
 }
 
 void time_fft() {
+  //Set the size
+  const int order = (int)(log((double)_fft_size) / log(2.0));
 
+  // Spec and working buffers
+  IppsFFTSpec_R_32f*  pFFTSpec = 0;
+  Ipp8u*              pFFTSpecBuf;
+  Ipp8u*              pFFTInitBuf;
+  Ipp8u*              pFFTWorkBuf;
+
+  // status
+  IppStatus status;
+  double    total_sqer = 0;
+
+  // Allocate buffers
+  std::vector<Ipp32f*> src = std::vector<Ipp32f*>(_batch_size);
+  std::vector<Ipp32f*> dst = std::vector<Ipp32f*>(_batch_size);
+  std::vector<Ipp32f*> inv = std::vector<Ipp32f*>(_batch_size);
+
+  for (int i = 0; i < _batch_size; ++i) {
+    src[i] = ippsMalloc_32f(_fft_size); // real
+    dst[i] = ippsMalloc_32f(_fft_size); // real, pack format
+    inv[i] = ippsMalloc_32f(_fft_size); // real, inverted data
+  }
+
+  // Query to get buffer sizes
+  int sizeFFTSpec,sizeFFTInitBuf,sizeFFTWorkBuf;
+  ippsFFTGetSize_R_32f(order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, &sizeFFTSpec, &sizeFFTInitBuf, &sizeFFTWorkBuf);
+
+  // Alloc FFT buffers
+  pFFTSpecBuf = ippsMalloc_8u(sizeFFTSpec);
+  pFFTInitBuf = ippsMalloc_8u(sizeFFTInitBuf);
+  pFFTWorkBuf = ippsMalloc_8u(sizeFFTWorkBuf);
+
+  // Initialize FFT
+  status = ippsFFTInit_R_32f(&pFFTSpec, order, IPP_FFT_DIV_INV_BY_N, ippAlgHintAccurate, pFFTSpecBuf, pFFTInitBuf);
+  if (0 != status)
+    std::cout << "FFT init status " << status << std::endl;
+  if (pFFTInitBuf)
+    ippFree(pFFTInitBuf);
+
+  int last_percent = -1;
+
+  for (int l = 0; l < _iterations; ++l) {
+
+    // populate data
+    for (int d = 0; d < _batch_size; ++d) {
+      populate(src[d]);
+    }
+
+    // Do the batch of FFTs
+    for (int i = 0; i < _batch_size; ++i) {
+      // Do the FFT
+      ippsFFTFwd_RToPack_32f(src[i], dst[i], pFFTSpec, pFFTWorkBuf);
+
+      // Invert the FFT
+      ippsFFTInv_PackToR_32f(dst[i], inv[i], pFFTSpec, pFFTWorkBuf);
+    }
+
+    // Compute the error
+    for (int i = 0; i < _batch_size; ++i) {
+      total_sqer += sqer(src[i], inv[i]);
+    }
+
+    // Report progress
+    int percent = (int) ((double) l / (double) _iterations * 100.0);
+    if (percent != last_percent) {
+      std::cout << "\r" << percent << "%";
+      std::cout.flush();
+      last_percent = percent;
+    }
+  }
+
+  // Report results
+  int count = _batch_size * _iterations;
+  std::cout << "\r";
+
+  std::cout << "Iterations: " << count << std::endl;
+  std::cout << "Data type:  " << (_use_periodic ? "periodic" : "random") << std::endl;
+  if (!_use_periodic) {
+    std::cout << "Mean:       " << _mean << std::endl;
+    std::cout << "STD:        " << _std << std::endl;
+  }
+  std::cout << "Total SQER: " << total_sqer << std::endl;
+  std::cout << "Ave SQER:   " << (total_sqer / (double) count) << std::endl;
+
+  // free
+  if (pFFTWorkBuf)
+    ippFree(pFFTWorkBuf);
+  if (pFFTSpecBuf)
+    ippFree(pFFTSpecBuf);
+
+  for (int i = 0; i < _batch_size; ++i) {
+    ippFree(src[i]);
+    ippFree(dst[i]);
+    ippFree(inv[i]);
+  }
 }
 
 int main(int ac, char* av[])
@@ -209,6 +324,7 @@ int main(int ac, char* av[])
     if (vm.count("iterations")) {
       _iterations = vm["iterations"].as<long>();
     }
+    _iterations /= _batch_size;
 
   } catch (std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
