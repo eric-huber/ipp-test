@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+#include <random>
 #include <cmath>
 
 #include <boost/program_options.hpp>
@@ -18,22 +20,82 @@ double        _mean           = 0.5;
 double        _std            = 0.2;
 long          _iterations     = 1000000;
 
+void populate_periodic(Ipp32f* buf) {
+  for (int i = 0; i < _fft_size; ++i) {
+    float t = i * .002;
+    float amp = sin(M_PI * t);
+    amp += sin(2 * M_PI * t);
+    amp += sin(3 * M_PI * t);
+    buf[i] = amp;
+  }
+}
+
+void populate_random(Ipp32f* buf) {
+  std::default_random_engine       generator(std::random_device{}());
+  std::normal_distribution<float> distribution(_mean, _std);
+  for (int i = 0; i < _fft_size; ++i) {
+    buf[i] = distribution(generator);
+  }
+}
+
+void populate(Ipp32f* buf) {
+  if (_use_periodic)
+    populate_periodic(buf);
+  else
+    populate_random(buf);
+}
+
+void write_real(std::string filename, Ipp32f* buf) {
+  std::ofstream ofs;
+  ofs.open(filename);
+  ofs.precision(10);
+
+  for (int i = 0; i < _fft_size; ++i) {
+    ofs << buf[i] << std::endl;
+  }
+
+  ofs.close();
+}
+
+void write_pack(std::string filename, Ipp32f* buf) {
+  std::ofstream ofs;
+  ofs.open(filename);
+
+  for (int i = 1; i < _fft_size / 2; i += 2) {
+    float real = buf[i];
+    float imag = buf[i+1];
+    float amp = sqrt(pow(real, 2) + pow(imag, 2));
+    float phase = atan2(imag, real);
+    ofs << amp << ", " << phase << std::endl;
+  }
+
+  ofs.close();
+}
+
 void test_fft() {
   //Set the size
   const int order = (int)(log((double)_fft_size) / log(2.0));
 
   // Spec and working buffers
-  IppsFFTSpec_C_32fc *pFFTSpec = 0;
-  Ipp8u *pFFTSpecBuf, *pFFTInitBuf, *pFFTWorkBuf;
+  IppsFFTSpec_R_32f*  pFFTSpec = 0;
+  Ipp8u*              pFFTSpecBuf;
+  Ipp8u*              pFFTInitBuf;
+  Ipp8u*              pFFTWorkBuf;
 
-  // Allocate complex buffers
-  Ipp32fc *pSrc=ippsMalloc_32fc(_fft_size);
-  Ipp32fc *pDst=ippsMalloc_32fc(_fft_size);
+  // status
+  IppStatus status;
+
+  // Allocate buffers
+  Ipp32f *pSrc = ippsMalloc_32f(_fft_size);  // real
+  Ipp32f *pDst = ippsMalloc_32f(_fft_size);  // real, pack format
+
+  // populate the buffers
+  populate(pSrc);
+  write_real(_data_file_name, pSrc);
 
   // Query to get buffer sizes
   int sizeFFTSpec,sizeFFTInitBuf,sizeFFTWorkBuf;
-  ippsFFTGetSize_C_32fc(order, IPP_FFT_NODIV_BY_ANY,
-    ippAlgHintAccurate, &sizeFFTSpec, &sizeFFTInitBuf, &sizeFFTWorkBuf);
+  ippsFFTGetSize_R_32f(order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, &sizeFFTSpec, &sizeFFTInitBuf, &sizeFFTWorkBuf);
 
   // Alloc FFT buffers
   pFFTSpecBuf = ippsMalloc_8u(sizeFFTSpec);
@@ -41,14 +103,18 @@ void test_fft() {
   pFFTWorkBuf = ippsMalloc_8u(sizeFFTWorkBuf);
 
   // Initialize FFT
-  ippsFFTInit_C_32fc(&pFFTSpec, order, IPP_FFT_NODIV_BY_ANY,
-    ippAlgHintAccurate, pFFTSpecBuf, pFFTInitBuf);
+  status = ippsFFTInit_R_32f(&pFFTSpec, order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, pFFTSpecBuf, pFFTInitBuf);
+  std::cout << "FFT init status " << status << std::endl;
   if (pFFTInitBuf)
     ippFree(pFFTInitBuf);
 
   // Do the FFT
-  ippsFFTFwd_CToC_32fc(pSrc, pDst, pFFTSpec, pFFTWorkBuf);
+  status = ippsFFTFwd_RToPack_32f(pSrc, pDst, pFFTSpec, pFFTWorkBuf);
+  std::cout << "FFT status " << status << std::endl;
 
+  write_pack(_fft_file_name, pDst);
+
+/*
   //check results
   ippsFFTInv_CToC_32fc(pDst, pDst, pFFTSpec, pFFTWorkBuf);
   int OK = 1;
@@ -64,7 +130,7 @@ void test_fft() {
   }
 
   std::cout << "FFT " << (1 == OK ? "OK" : "Fail") << std::endl;
-
+*/
   if (pFFTWorkBuf)
     ippFree(pFFTWorkBuf);
   if (pFFTSpecBuf)
