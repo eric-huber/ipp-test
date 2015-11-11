@@ -72,6 +72,17 @@ void write_pack(std::string filename, Ipp32f* buf) {
   ofs.close();
 }
 
+void check_result(Ipp32f* pSrc, Ipp32f* pInv) {
+  int OK = 1;
+  for (int i = 0; i < _fft_size; i++) {
+    if (0.001 < (abs(pSrc[i] - pInv[i]))) {
+      OK = 0;
+      break;
+    }
+  }
+  std::cout << "FFT " << (1 == OK ? "OK" : "Fail") << std::endl;
+}
+
 void test_fft() {
   //Set the size
   const int order = (int)(log((double)_fft_size) / log(2.0));
@@ -104,7 +115,7 @@ void test_fft() {
   pFFTWorkBuf = ippsMalloc_8u(sizeFFTWorkBuf);
 
   // Initialize FFT
-  status = ippsFFTInit_R_32f(&pFFTSpec, order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, pFFTSpecBuf, pFFTInitBuf);
+  status = ippsFFTInit_R_32f(&pFFTSpec, order, IPP_FFT_DIV_INV_BY_N, ippAlgHintAccurate, pFFTSpecBuf, pFFTInitBuf);
   if (0 != status)
     std::cout << "FFT init status " << status << std::endl;
   if (pFFTInitBuf)
@@ -122,23 +133,11 @@ void test_fft() {
   if (0 != status)
     std::cout << "iFFT status " << status << std::endl;
 
-  // Normalize (we may move this into the plan later)
-  for (int i = 0; i < _fft_size; ++i) {
-    pInv[i] /= (Ipp32f) _fft_size;
-  }
-
   // Write results
   write_real(_bak_file_name, pInv);
 
   //check results
-  int OK = 1;
-  for (int i = 0; i < _fft_size; i++) {
-    if (0.001 < (abs(pSrc[i] - pInv[i]))) {
-      OK = 0;
-      break;
-    }
-  }
-  std::cout << "FFT " << (1 == OK ? "OK" : "Fail") << std::endl;
+  check_result(pSrc, pInv);
 
   if (pFFTWorkBuf)
     ippFree(pFFTWorkBuf);
