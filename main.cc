@@ -2,13 +2,15 @@
 #include <fstream>
 #include <random>
 #include <cmath>
+#include <chrono>
 
 #include <boost/program_options.hpp>
 
 #include <ippcore.h>
 #include <ipps.h>
 
-namespace     po = boost::program_options;
+namespace       po = boost::program_options;
+using namespace std::chrono;
 
 const char*   _data_file_name = "fft-data.txt";
 const char*   _fft_file_name  = "fft-forward.txt";
@@ -19,7 +21,7 @@ size_t        _batch_size     = 10000;
 bool          _use_periodic   = false;
 double        _mean           = 0.5;
 double        _std            = 0.2;
-long          _iterations     = 1000000;
+long          _iterations     = 100000;
 
 void populate_periodic(Ipp32f* buf) {
   for (int i = 0; i < _fft_size; ++i) {
@@ -211,13 +213,17 @@ void time_fft() {
     ippFree(pFFTInitBuf);
 
   int last_percent = -1;
+  nanoseconds duration(0);
 
   for (int l = 0; l < _iterations; ++l) {
 
-    // populate data
+    // Populate data
     for (int d = 0; d < _batch_size; ++d) {
       populate(src[d]);
     }
+
+    // Start clock
+    high_resolution_clock::time_point start = high_resolution_clock::now();
 
     // Do the batch of FFTs
     for (int i = 0; i < _batch_size; ++i) {
@@ -227,6 +233,10 @@ void time_fft() {
       // Invert the FFT
       ippsFFTInv_PackToR_32f(dst[i], inv[i], pFFTSpec, pFFTWorkBuf);
     }
+
+    // Stop clock
+    high_resolution_clock::time_point finish = high_resolution_clock::now();
+    duration += duration_cast<nanoseconds>(finish - start);
 
     // Compute the error
     for (int i = 0; i < _batch_size; ++i) {
@@ -244,16 +254,20 @@ void time_fft() {
 
   // Report results
   int count = _batch_size * _iterations;
-  std::cout << "\r";
+  double ave_dur = duration.count() / (double) count;
 
-  std::cout << "Iterations: " << count << std::endl;
-  std::cout << "Data type:  " << (_use_periodic ? "periodic" : "random") << std::endl;
+  std::cout << "\r";
+  std::cout << "Iterations:       " << count << std::endl;
+  std::cout << "Data size:        " << _fft_size << std::endl;
+  std::cout << "Data type:        " << (_use_periodic ? "Periodic" : "Random") << std::endl;
   if (!_use_periodic) {
-    std::cout << "Mean:       " << _mean << std::endl;
-    std::cout << "STD:        " << _std << std::endl;
+    std::cout << "Mean:             " << _mean << std::endl;
+    std::cout << "STD:              " << _std << std::endl;
   }
-  std::cout << "Total SQER: " << total_sqer << std::endl;
-  std::cout << "Ave SQER:   " << (total_sqer / (double) count) << std::endl;
+  std::cout << "Total duration:   " << duration.count()  << " ns" << std::endl;
+  std::cout << "Total SQER:       " << total_sqer << std::endl;
+  std::cout << "Average duration: " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << std::endl;
+  std::cout << "Ave SQER:         " << (total_sqer / (double) count) << std::endl;
 
   // free
   if (pFFTWorkBuf)
@@ -279,7 +293,7 @@ int main(int ac, char* av[])
     desc.add_options()
     ("help,h",         "Produce help message")
 
-    ("size,s",         po::value<int>(), "Set the size of the buffer [8192]")
+    ("size,s",         po::value<int>(), "Set the size of the buffer")
 
     ("periodic,p",     "Use a periodic data set")
     ("random,r",       "Use a gaussian distributed random data set")
