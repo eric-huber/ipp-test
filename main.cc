@@ -86,8 +86,9 @@ void test_fft() {
   IppStatus status;
 
   // Allocate buffers
-  Ipp32f *pSrc = ippsMalloc_32f(_fft_size);  // real
-  Ipp32f *pDst = ippsMalloc_32f(_fft_size);  // real, pack format
+  Ipp32f* pSrc = ippsMalloc_32f(_fft_size); // real
+  Ipp32f* pDst = ippsMalloc_32f(_fft_size); // real, pack format
+  Ipp32f* pInv = ippsMalloc_32f(_fft_size); // real, inverted data
 
   // populate the buffers
   populate(pSrc);
@@ -104,19 +105,33 @@ void test_fft() {
 
   // Initialize FFT
   status = ippsFFTInit_R_32f(&pFFTSpec, order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate, pFFTSpecBuf, pFFTInitBuf);
-  std::cout << "FFT init status " << status << std::endl;
+  if (0 != status)
+    std::cout << "FFT init status " << status << std::endl;
   if (pFFTInitBuf)
     ippFree(pFFTInitBuf);
 
   // Do the FFT
   status = ippsFFTFwd_RToPack_32f(pSrc, pDst, pFFTSpec, pFFTWorkBuf);
-  std::cout << "FFT status " << status << std::endl;
+  if (0 != status)
+    std::cout << "FFT status " << status << std::endl;
 
   write_pack(_fft_file_name, pDst);
 
-/*
+  // Invert the FFT
+  status = ippsFFTInv_PackToR_32f(pDst, pInv, pFFTSpec, pFFTWorkBuf);
+  if (0 != status)
+    std::cout << "iFFT status " << status << std::endl;
+
+  // Normalize (we may move this into the plan later)
+  for (int i = 0; i < _fft_size; ++i) {
+    pInv[i] /= (Ipp32f) _fft_size;
+  }
+
+  // Write results
+  write_real(_bak_file_name, pInv);
+
   //check results
-  ippsFFTInv_CToC_32fc(pDst, pDst, pFFTSpec, pFFTWorkBuf);
+  /*
   int OK = 1;
   for (int i = 0; i < _fft_size; i++) {
      pDst[i].re /= (Ipp32f) _fft_size;
@@ -130,7 +145,8 @@ void test_fft() {
   }
 
   std::cout << "FFT " << (1 == OK ? "OK" : "Fail") << std::endl;
-*/
+  */
+
   if (pFFTWorkBuf)
     ippFree(pFFTWorkBuf);
   if (pFFTSpecBuf)
@@ -138,7 +154,7 @@ void test_fft() {
 
   ippFree(pSrc);
   ippFree(pDst);
-
+  ippFree(pInv);
 }
 
 void time_fft() {
