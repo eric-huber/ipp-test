@@ -103,6 +103,17 @@ double sqer(Ipp32f* pSrc, Ipp32f* pInv) {
   return 10.0 * log(sp/qe);
 }
 
+void report_settings(int count) {
+  if (0 != count)
+    std::cout << "Iterations:       " << count << std::endl;
+  std::cout << "Data size:        " << _fft_size << std::endl;
+  std::cout << "Data type:        " << (_use_periodic ? "Periodic" : "Random") << std::endl;
+  if (!_use_periodic) {
+    std::cout << "Mean:             " << _mean << std::endl;
+    std::cout << "STD:              " << _std << std::endl;
+  }
+}
+
 void test_fft() {
   //Set the size
   const int order = (int)(log((double)_fft_size) / log(2.0));
@@ -157,8 +168,9 @@ void test_fft() {
   write_real(_bak_file_name, pInv);
 
   //check results
-  std::cout << "FFT:  " << check_result(pSrc, pInv) << std::endl;
-  std::cout << "SQER: " << sqer(pSrc, pInv) << std::endl;
+  report_settings(0);
+  std::cout << "FFT:              " << check_result(pSrc, pInv) << std::endl;
+  std::cout << "SQER:             " << sqer(pSrc, pInv) << std::endl;
 
   // free
   if (pFFTWorkBuf)
@@ -257,13 +269,7 @@ void time_fft() {
   double ave_dur = duration.count() / (double) count;
 
   std::cout << "\r";
-  std::cout << "Iterations:       " << count << std::endl;
-  std::cout << "Data size:        " << _fft_size << std::endl;
-  std::cout << "Data type:        " << (_use_periodic ? "Periodic" : "Random") << std::endl;
-  if (!_use_periodic) {
-    std::cout << "Mean:             " << _mean << std::endl;
-    std::cout << "STD:              " << _std << std::endl;
-  }
+  report_settings(count);
   std::cout << "Total duration:   " << duration.count()  << " ns" << std::endl;
   std::cout << "Total SQER:       " << total_sqer << std::endl;
   std::cout << "Average duration: " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << std::endl;
