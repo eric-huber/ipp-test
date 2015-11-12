@@ -17,7 +17,7 @@ const char*   _fft_file_name  = "fft-forward.txt";
 const char*   _bak_file_name  = "fft-backward.txt";
 
 size_t        _fft_size       = 8192;
-size_t        _batch_size     = 10000;
+size_t        _batch_size     = 1000;
 bool          _use_periodic   = false;
 double        _mean           = 0.5;
 double        _std            = 0.2;
@@ -104,9 +104,13 @@ double sqer(Ipp32f* pSrc, Ipp32f* pInv) {
 }
 
 void report_settings(int count) {
+
+  const int order = (int)(log((double)_fft_size) / log(2.0));
+
   if (0 != count)
     std::cout << "Iterations:       " << count << std::endl;
   std::cout << "Data size:        " << _fft_size << std::endl;
+  std::cout << "Data order:       " << order << std::endl;
   std::cout << "Data type:        " << (_use_periodic ? "Periodic" : "Random") << std::endl;
   if (!_use_periodic) {
     std::cout << "Mean:             " << _mean << std::endl;
@@ -270,7 +274,6 @@ void time_fft() {
 
   std::cout << "\r";
   report_settings(count);
-  std::cout << "Order:            " << order << std::endl;
   std::cout << "Total duration:   " << duration.count()  << " ns" << std::endl;
   std::cout << "Total SQER:       " << total_sqer << std::endl;
   std::cout << "Average duration: " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << std::endl;
