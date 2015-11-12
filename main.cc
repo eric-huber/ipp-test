@@ -266,10 +266,11 @@ void time_fft() {
 
   // Report results
   int count = _batch_size * _iterations;
-  double ave_dur = duration.count() / (double) count;
+  double ave_dur = duration.count() / (double) (count * 2); // we do 2 FFTs per loop
 
   std::cout << "\r";
   report_settings(count);
+  std::cout << "Order:            " << order << std::endl;
   std::cout << "Total duration:   " << duration.count()  << " ns" << std::endl;
   std::cout << "Total SQER:       " << total_sqer << std::endl;
   std::cout << "Average duration: " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << std::endl;
@@ -299,7 +300,7 @@ int main(int ac, char* av[])
     desc.add_options()
     ("help,h",         "Produce help message")
 
-    ("size,s",         po::value<int>(), "Set the size of the buffer")
+    ("size,s",         po::value<long>(), "Set the size of the buffer")
 
     ("periodic,p",     "Use a periodic data set")
     ("random,r",       "Use a gaussian distributed random data set")
@@ -319,7 +320,7 @@ int main(int ac, char* av[])
     }
 
     if (vm.count("size")) {
-      _fft_size = vm["size"].as<int>();
+      _fft_size = vm["size"].as<long>();
     }
 
     if (vm.count("periodic")) {
