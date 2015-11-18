@@ -1,3 +1,4 @@
+#CC			  = /opt/intel/bin/icc
 CC        = g++
 CXXFLAGS += -I /opt/intel/compilers_and_libraries_2016.0.109/linux/ipp/include/
 CXXFLAGS += -std=c++11

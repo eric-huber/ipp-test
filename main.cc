@@ -358,6 +358,8 @@ int main(int ac, char* av[])
     return 1;
   }
 
+  ippInit();
+
   if (time)
     time_fft();
   else
