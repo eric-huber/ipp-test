@@ -86,15 +86,15 @@ std::string check_result(Ipp32f* pSrc, Ipp32f* pInv) {
   return 1 == OK ? "OK" : "Fail";
 }
 
-double sqer(Ipp32f* pSrc, Ipp32f* pInv) {
+float sqer(Ipp32f* pSrc, Ipp32f* pInv) {
   // signal power
-  double sp = 0;
+  float sp = 0;
   for (int i = 0; i < _fft_size; i++) {
     sp += pow(pSrc[i], 2);
   }
 
   // quant error energy
-  double qe = 0;
+  float qe = 0;
   for (int i = 0; i < _fft_size; i++) {
     qe += pow(pSrc[i] - pInv[i], 2);
   }
@@ -189,7 +189,7 @@ void test_fft() {
 
 void time_fft() {
   //Set the size
-  const int order = (int)(log((double)_fft_size) / log(2.0));
+  const int order = (int)(log((float)_fft_size) / log(2.0));
 
   // Spec and working buffers
   IppsFFTSpec_R_32f*  pFFTSpec = 0;
@@ -199,7 +199,7 @@ void time_fft() {
 
   // status
   IppStatus status;
-  double    total_sqer = 0;
+  float     total_sqer = 0;
 
   // Allocate buffers
   std::vector<Ipp32f*> src = std::vector<Ipp32f*>(_batch_size);
@@ -260,24 +260,25 @@ void time_fft() {
     }
 
     // Report progress
-    int percent = (int) ((double) l / (double) _iterations * 100.0);
+    int percent = (int) ((float) l / (float) _iterations * 100.0);
     if (percent != last_percent) {
-      std::cout << "\r" << percent << "%";
-      std::cout.flush();
+      std::cerr << "\r" << _fft_size << ": " << percent << "%          ";
+      std::cerr.flush();
       last_percent = percent;
     }
   }
+  std::cerr << "\r";
+  std::cerr.flush();
 
   // Report results
   int count = _batch_size * _iterations;
-  double ave_dur = duration.count() / (double) (count * 2); // we do 2 FFTs per loop
+  float ave_dur = duration.count() / (float) (count * 2); // we do 2 FFTs per loop
 
-  std::cout << "\r";
   report_settings(count);
   std::cout << "Total duration:   " << duration.count()  << " ns" << std::endl;
   std::cout << "Total SQER:       " << total_sqer << std::endl;
-  std::cout << "Average duration: " << ave_dur << " ns (" << (ave_dur / 1000.0) << " μs)" << std::endl;
-  std::cout << "Ave SQER:         " << (total_sqer / (double) count) << std::endl;
+  std::cout << "Average duration: " << ave_dur << " ns (" << (ave_dur / 1000.0) << " us)" << std::endl;
+  std::cout << "Ave SQER:         " << (total_sqer / (float) count) << std::endl << std::endl;
 
   // free
   if (pFFTWorkBuf)

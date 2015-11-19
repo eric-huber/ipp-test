@@ -1,10 +1,9 @@
 #CC			  = /opt/intel/bin/icc
 CC        = g++
-CXXFLAGS += -I /opt/intel/compilers_and_libraries_2016.0.109/linux/ipp/include/
-CXXFLAGS += -std=c++11
+CXXFLAGS += -O2 -std=c++11
 LDFLAGS  += -lboost_program_options
 LDFLAGS  += -lm
-LDFLAGS  += -L/opt/intel/compilers_and_libraries_2016.0.109/linux/ipp/lib/intel64 -lippcc -lipps -lippcore
+LDFLAGS  += -lippcc -lipps -lippcore
 
 PROG=ipp-test
 OBJS=main.o
